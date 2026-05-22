@@ -4,16 +4,21 @@ const url = require('url');
 const fs = require('fs');
 const path = require('path');
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 http.createServer((req, res) => {
   const parsedUrl = url.parse(req.url, true);
+  const pathname = parsedUrl.pathname;
 
-  // Serve file HTML
-  if (parsedUrl.pathname === '/' || parsedUrl.pathname === '/index.html') {
+  // Serve trang chủ
+  if (pathname === '/' || pathname === '/index.html') {
     const filePath = path.join(__dirname, 'index.html');
     fs.readFile(filePath, (err, data) => {
-      if (err) { res.writeHead(404); res.end('Not found'); return; }
+      if (err) {
+        res.writeHead(500);
+        res.end('Loi doc file: ' + err.message);
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(data);
     });
@@ -21,30 +26,30 @@ http.createServer((req, res) => {
   }
 
   // Proxy trang getkey
-  if (parsedUrl.pathname === '/proxy') {
+  if (pathname === '/proxy') {
     const game = parsedUrl.query.game || '';
     const targetUrl = `https://getkey.pmodgame.com/?reseller=HAMA${game ? '&game=' + game : ''}`;
 
-    https.get(targetUrl, {
+    const options = {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 Chrome/120.0.0.0 Mobile Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9',
         'Referer': 'https://getkey.pmodgame.com/',
       }
-    }, (proxyRes) => {
+    };
+
+    https.get(targetUrl, options, (proxyRes) => {
       let body = '';
       proxyRes.on('data', chunk => body += chunk);
       proxyRes.on('end', () => {
-        // Xóa header chặn iframe
+        body = body.replace(/src="\//g, 'src="https://getkey.pmodgame.com/');
+        body = body.replace(/href="\//g, 'href="https://getkey.pmodgame.com/');
+        body = body.replace(/(src|href)="(?!http)/g, '$1="https://getkey.pmodgame.com/');
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
           'Access-Control-Allow-Origin': '*',
-          // KHÔNG set X-Frame-Options để cho phép nhúng
         });
-        // Fix các link tương đối trong HTML
-        body = body.replace(/src="\//g, 'src="https://getkey.pmodgame.com/');
-        body = body.replace(/href="\//g, 'href="https://getkey.pmodgame.com/');
         res.end(body);
       });
     }).on('error', (e) => {
@@ -58,7 +63,5 @@ http.createServer((req, res) => {
   res.end('Not found');
 
 }).listen(PORT, () => {
-  console.log(`✅ Server chạy tại http://localhost:${PORT}`);
-  console.log(`📺 Mở trình duyệt vào http://localhost:${PORT}`);
+  console.log(`Server chay tai port ${PORT}`);
 });
-      
